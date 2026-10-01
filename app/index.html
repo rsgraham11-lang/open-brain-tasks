@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://dvneqhqogfndquvwapho.supabase.co; img-src 'self' data:; style-src 'self'">
+  <meta name="theme-color" content="#1f6feb">
+  <title>Open Brain Tasks</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Tasks</h1>
+    <select id="tag-filter" aria-label="Filter by tag">
+      <option value="__all__">All tags</option>
+    </select>
+    <button id="settings-btn" class="icon-btn" type="button" aria-label="Settings" aria-haspopup="true">⋮</button>
+    <button id="add-btn" class="icon-btn primary" type="button" aria-label="Add task">+</button>
+  </header>
+  <div id="settings-menu" class="menu" hidden>
+    <button id="forget-key-btn" type="button">Forget key on this device</button>
+  </div>
+  <div id="banner" class="banner" role="alert" hidden>
+    <span id="banner-text"></span>
+    <button id="banner-retry" type="button">Retry</button>
+  </div>
+  <main id="view" aria-live="polite"></main>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" data-tab="upcoming" aria-selected="true">Upcoming</button>
+    <button type="button" role="tab" data-tab="priority" aria-selected="false">Priority</button>
+    <button type="button" role="tab" data-tab="all" aria-selected="false">All</button>
+    <button type="button" role="tab" data-tab="search" aria-selected="false" aria-label="Search">🔍</button>
+  </nav>
+  <div id="toast" class="toast" role="status" hidden>
+    <span id="toast-text"></span>
+    <button id="toast-action" type="button" hidden>Undo</button>
+  </div>
+  <dialog id="task-dialog" aria-label="Task"></dialog>
+  <dialog id="key-dialog" aria-label="App key"></dialog>
+</body>
+</html>
