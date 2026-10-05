@@ -42,3 +42,22 @@ export function createSyncGuard() {
     },
   };
 }
+
+/**
+ * One request per task at a time: run(id, fn) starts fn unless a run for that id is still pending
+ * (then it is ignored and resolves undefined). Other ids are unaffected; the id is freed even if fn throws.
+ */
+export function createTaskLock() {
+  const busy = new Set();
+  return {
+    async run(id, fn) {
+      if (busy.has(id)) return undefined;
+      busy.add(id);
+      try {
+        return await fn();
+      } finally {
+        busy.delete(id);
+      }
+    },
+  };
+}

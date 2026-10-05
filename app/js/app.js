@@ -15,7 +15,7 @@ import {
 } from "./logic.js";
 import { createPriorityHandler } from "./priority.js";
 import { storage } from "./storage.js";
-import { createSyncGuard } from "./sync.js";
+import { createSyncGuard, createTaskLock } from "./sync.js";
 import { renderTab } from "./tabs.js";
 import { el, hideBanner, showBanner, showKeyPrompt, showToast } from "./views.js";
 
@@ -25,6 +25,7 @@ const TAG_STORE = "openBrainTasks.tagFilter";
 let memoryKey = null;
 const getKey = () => storage.get(KEY_STORE) ?? memoryKey;
 const api = createApi(API_BASE, getKey);
+const taskLock = createTaskLock(); // ignores ✓/Done taps while that task's complete/reopen is running
 const guard = createSyncGuard(); // local writes in flight; stale refreshes are discarded
 const $ = (id) => document.getElementById(id);
 
@@ -114,7 +115,7 @@ async function refreshTags() {
 // ---------- rendering ----------
 
 const rowHandlers = {
-  onCheck: (t) => (t.status === "open" ? completeTask(t) : reopenTask(t)),
+  onCheck: (t) => taskLock.run(t.id, () => (t.status === "open" ? completeTask(t) : reopenTask(t))),
   onOpen: (t) => (t.status === "open" ? editTask(t) : reopenTask(t)),
   onPriority: createPriorityHandler({
     save: (t, priority) => api.updateTask(t.short_id, { priority }),
