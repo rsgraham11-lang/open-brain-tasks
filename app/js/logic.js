@@ -196,3 +196,8 @@ export function diffPatch(task, fields) {
   }
   return patch;
 }
+
+/** Row priority toggle: tapping the selected priority clears it (null); any other tap selects that one. */
+export function nextPriority(current, tapped) {
+  return (current ?? null) === tapped ? null : tapped;
+}

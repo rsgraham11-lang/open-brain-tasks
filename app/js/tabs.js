@@ -12,7 +12,7 @@ import { el, taskGroups } from "./views.js";
 
 /**
  * state: {tasks, today, tab, tag, showCompleted, query}
- * handlers: {onCheck(task), onOpen(task)} for task rows
+ * handlers: {onCheck(task), onOpen(task), onPriority(task, priority)} for task rows
  * actions: {setShowCompleted(on), setQuery(text)}; each updates state and calls renderTab again
  */
 export function renderTab(view, state, handlers, actions) {

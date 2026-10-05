@@ -1,9 +1,9 @@
 // DOM rendering helpers. Task data only reaches the page through textContent, element
 // properties, or setAttribute — never by parsing HTML strings.
-import { formatDue } from "./logic.js";
+import { PRIORITIES, formatDue } from "./logic.js";
 
 const PROPERTIES = new Set(["value", "checked", "disabled", "selected"]);
-const PRIORITY_LABELS = { 1: "High", 2: "Normal", 3: "Low" };
+const ROW_PRIORITIES = PRIORITIES.filter((p) => p.value !== null); // High, Normal, Low
 
 /**
  * el("button", {class: "x", text: "Hi", onclick: fn, "aria-label": "..."}, ...children)
@@ -26,7 +26,10 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
-/** One task: a round check button and a tappable body. handlers: {onCheck(task), onOpen(task)} */
+/**
+ * One task: a Done button, the H/N/L priority column (open tasks only), and a tappable body.
+ * handlers: {onCheck(task), onOpen(task), onPriority(task, priority)}; priority is 1, 2, or 3.
+ */
 export function taskRow(task, today, handlers) {
   const done = task.status === "done";
   const meta = [];
@@ -35,26 +38,45 @@ export function taskRow(task, today, handlers) {
     meta.push(el("span", { class: overdue ? "due overdue" : "due", text: formatDue(task.due_date, today) }));
   }
   if (task.recurrence) meta.push(el("span", { class: "repeat", text: `↻ ${task.recurrence}` }));
-  if (PRIORITY_LABELS[task.priority]) {
-    meta.push(el("span", { class: `prio prio-${task.priority}`, text: PRIORITY_LABELS[task.priority] }));
-  }
   for (const tag of task.tags) meta.push(el("span", { class: "tag", text: `#${tag}` }));
 
   return el(
     "li",
     { class: done ? "task done" : "task" },
-    el("button", {
-      type: "button",
-      class: done ? "check checked" : "check",
-      "aria-label": `${done ? "Reopen" : "Complete"}: ${task.title}`,
-      text: done ? "✓" : "",
-      onclick: () => handlers.onCheck(task),
-    }),
+    el(
+      "button",
+      {
+        type: "button",
+        class: done ? "done-btn checked" : "done-btn",
+        "aria-label": `${done ? "Reopen" : "Complete"}: ${task.title}`,
+        onclick: () => handlers.onCheck(task),
+      },
+      el("span", { class: "done-label", text: done ? "✓" : "Done" }),
+    ),
+    done ? null : priorityColumn(task, handlers.onPriority),
     el(
       "button",
       { type: "button", class: "row-body", onclick: () => handlers.onOpen(task) },
       el("span", { class: "title", text: task.title }),
       meta.length ? el("span", { class: "meta" }, meta) : null,
+    ),
+  );
+}
+
+/** Three stacked toggle buttons, H / N / L; the task's current priority is pressed. */
+function priorityColumn(task, onPriority) {
+  return el(
+    "div",
+    { class: "prio-col", role: "group", "aria-label": "Priority" },
+    ROW_PRIORITIES.map((p) =>
+      el("button", {
+        type: "button",
+        class: `prio-btn prio-btn-${p.value}`,
+        "aria-pressed": String(task.priority === p.value),
+        "aria-label": `${p.label} priority: ${task.title}`,
+        text: p.label.charAt(0),
+        onclick: () => onPriority(task, p.value),
+      })
     ),
   );
 }

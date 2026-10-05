@@ -13,28 +13,19 @@ import {
   tagOptions,
   tagStillExists,
 } from "./logic.js";
+import { createPriorityHandler } from "./priority.js";
+import { storage } from "./storage.js";
+import { createSyncGuard } from "./sync.js";
 import { renderTab } from "./tabs.js";
 import { el, hideBanner, showBanner, showKeyPrompt, showToast } from "./views.js";
 
 const KEY_STORE = "openBrainTasks.appKey";
 const TAG_STORE = "openBrainTasks.tagFilter";
 
-// localStorage can throw (private mode, blocked storage); the app then keeps state in memory only.
-const storage = {
-  get: (k) => {
-    try { return localStorage.getItem(k); } catch { return null; }
-  },
-  set: (k, v) => {
-    try { localStorage.setItem(k, v); } catch { /* memory only */ }
-  },
-  remove: (k) => {
-    try { localStorage.removeItem(k); } catch { /* nothing stored */ }
-  },
-};
-
 let memoryKey = null;
 const getKey = () => storage.get(KEY_STORE) ?? memoryKey;
 const api = createApi(API_BASE, getKey);
+const guard = createSyncGuard(); // local writes in flight; stale refreshes are discarded
 const $ = (id) => document.getElementById(id);
 
 const state = {
@@ -96,9 +87,11 @@ async function refresh() {
     askForKey();
     return;
   }
+  const token = guard.snapshot();
   try {
     const since = addDays(localToday(), -COMPLETED_DAYS);
     const [list, tags] = await Promise.all([api.listTasks(since), api.listTags()]);
+    if (guard.isStale(token)) return guard.onIdle(refresh); // a write raced this load; reload once it settles
     state.today = list.today;
     state.tasks = list.tasks;
     state.tags = tags;
@@ -123,6 +116,11 @@ async function refreshTags() {
 const rowHandlers = {
   onCheck: (t) => (t.status === "open" ? completeTask(t) : reopenTask(t)),
   onOpen: (t) => (t.status === "open" ? editTask(t) : reopenTask(t)),
+  onPriority: createPriorityHandler({
+    save: (t, priority) => api.updateTask(t.short_id, { priority }),
+    getTask: (id) => state.tasks.find((t) => t.id === id),
+    replaceTask, render: renderView, onError: handleError, guard,
+  }),
 };
 
 const tabActions = {
@@ -175,7 +173,7 @@ async function completeTask(task) {
   replaceTask({ ...task, status: "done", completed_at: new Date().toISOString() }); // optimistic
   renderView();
   try {
-    const { done, next } = await api.completeTask(task.short_id);
+    const { done, next } = await guard.run(() => api.completeTask(task.short_id));
     replaceTask(done);
     if (next) state.tasks = [...state.tasks, next];
     renderView();
@@ -192,7 +190,7 @@ async function completeTask(task) {
 /** Undo = reopen the task first, then delete the next occurrence the completion created (if any). */
 async function undoComplete(done, next) {
   try {
-    replaceTask(await api.updateTask(done.short_id, { status: "open" }));
+    replaceTask(await guard.run(() => api.updateTask(done.short_id, { status: "open" })));
     renderView();
   } catch (err) {
     handleError(err);
@@ -201,7 +199,7 @@ async function undoComplete(done, next) {
   }
   try {
     if (next) {
-      await api.deleteTask(next.short_id);
+      await guard.run(() => api.deleteTask(next.short_id));
       state.tasks = state.tasks.filter((t) => t.id !== next.id);
       renderView();
     }
@@ -218,7 +216,7 @@ async function reopenTask(task) {
   replaceTask({ ...task, status: "open", completed_at: null }); // optimistic
   renderView();
   try {
-    replaceTask(await api.updateTask(task.short_id, { status: "open" }));
+    replaceTask(await guard.run(() => api.updateTask(task.short_id, { status: "open" })));
     renderView();
     refreshTags();
     showToast(`Reopened: ${task.title}`);
@@ -234,7 +232,7 @@ const tagNames = () => state.tags.map((t) => t.tag).sort();
 function addTask() {
   openTaskDialog(null, tagNames(), {
     onSave: async (fields) => {
-      const task = await withGlobalErrors(api.createTask(fields));
+      const task = await withGlobalErrors(guard.run(() => api.createTask(fields)));
       state.tasks = [...state.tasks, task];
       renderView();
       refreshTags();
@@ -247,13 +245,13 @@ function editTask(task) {
     onSave: async (fields) => {
       const patch = diffPatch(task, fields);
       if (!Object.keys(patch).length) return;
-      replaceTask(await withGlobalErrors(api.updateTask(task.short_id, patch)));
+      replaceTask(await withGlobalErrors(guard.run(() => api.updateTask(task.short_id, patch))));
       renderView();
       refreshTags();
     },
     onComplete: () => completeTask(task),
     onDelete: async () => {
-      await withGlobalErrors(api.deleteTask(task.short_id));
+      await withGlobalErrors(guard.run(() => api.deleteTask(task.short_id)));
       state.tasks = state.tasks.filter((t) => t.id !== task.id);
       renderView();
       refreshTags();
